@@ -189,7 +189,7 @@ melt_to_top_n <- function(ps,n,rank){
   #create a taxonomy table containing these ASVs with everything else set to "Other"
   tt <- data.frame(ps@tax_table@.Data)
   tt$taxon <- "Other"
-  tt[tt[[rank]] == "Unassigned",]$taxon <- "Unassigned"
+  try(tt[tt[[rank]] == "Unassigned",]$taxon <- "Unassigned")
   tt[tt[[rank]] %in% topntaxa,]$taxon <- tt[tt[[rank]] %in% topntaxa,][[rank]]
 
 
@@ -248,8 +248,8 @@ melt_to_top_n <- function(ps,n,rank){
 #' @examples
 #' # Example usage:
 #' data("GlobalPatterns")
-#` ps <- subset_taxa(GlobalPatterns, Phylum %in% c("Proteobacteria", "Bacteroidetes"))
-#` plot_taxa_abundance(psx, "Genus", "Sample", wrap = "SampleType", n = 15, abs = FALSE)
+#' ps <- subset_taxa(GlobalPatterns, Phylum %in% c("Proteobacteria", "Bacteroidetes"))
+#' plot_taxa_abundance(ps, "Genus", "Sample", wrap = "SampleType", n = 15, abs = FALSE)
 #'
 #' @note If the phyloseq object is not agglomerated at the specified rank, the function will perform agglomeration.
 
@@ -705,4 +705,223 @@ da_bars <- function(sigtab, title,cols = NULL, x_limits = NULL,taxa_order = NULL
 
   return(p)
 }
+
+#' Plot Microbial Abundance Over Time
+#'
+#' This function plots the relative abundance of selected taxa over time (or another variable),
+#' faceted by taxa, with error bars representing standard error.
+#'
+#' @param ps A `phyloseq` object.
+#' @param tax_rank A character string specifying the taxonomic rank (e.g., "Phylum", "Genus").
+#' @param taxa_list A character vector of taxa names to include in the plot.
+#' @param x A character string specifying the variable to use for the x-axis (default: `"Time"`).
+#' @param color (Optional) A character string specifying the variable to use for color grouping.
+#'   If `NULL`, all lines will be the same color (default: `"Treatment"`).
+#'
+#' @return A `ggplot2` object showing relative abundance over time.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' plot_microbe_abundance(ps, "Genus", c("Lactobacillus", "Bifidobacterium"))
+#' plot_microbe_abundance(ps, "Genus", c("Lactobacillus"), color = NULL)
+#' }
+plot_taxa_lines <- function(ps, tax_rank, taxa_list, x, color = "Treatment") {
+  # check inputs
+  stopifnot(inherits(ps, "phyloseq"))
+  tax_hierarchy <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+  if (!tax_rank %in% tax_hierarchy) {
+    stop("`tax_rank` must be one of: ", paste(tax_hierarchy, collapse = ", "))
+  }
+
+  # Agglomerate at specified taxonomic rank
+  ps_rank <- speedyseq::tax_glom(ps, taxrank = tax_rank)
+  df <- speedyseq::psmelt(ps_rank)
+
+  # Build composite taxonomy labels
+  rank_index <- match(tax_rank, tax_hierarchy)
+  ranks_to_concat <- tax_hierarchy[pmax(1, rank_index - 1):rank_index]
+
+  df <- df %>%
+    dplyr::mutate(
+      TaxonLabel = apply(dplyr::select(., dplyr::all_of(ranks_to_concat)), 1,
+                         function(x) paste(stats::na.omit(x), collapse = "_")),
+      TaxonOrder = apply(dplyr::select(., dplyr::all_of(ranks_to_concat)), 1,
+                         function(x) paste(ifelse(is.na(x), "zzz", x), collapse = "_"))
+    )
+
+  # Filter taxa
+  df_filtered <- dplyr::filter(df, .data[[tax_rank]] %in% taxa_list)
+
+  # Summarize mean abundance and SE
+  grouping_vars <- c(x, "TaxonLabel", "TaxonOrder")
+  if (!is.null(color)) grouping_vars <- c(grouping_vars, color)
+
+  df_summary <- df_filtered %>%
+    dplyr::group_by(dplyr::across(all_of(grouping_vars))) %>%
+    dplyr::summarize(
+      mean_abundance = mean(.data$Abundance, na.rm = TRUE),
+      sd = stats::sd(.data$Abundance, na.rm = TRUE),
+      n = dplyr::n(),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      se = .data$sd / sqrt(.data$n),
+      TaxonLabel = factor(.data$TaxonLabel, levels = unique(.data$TaxonLabel))
+    ) %>%
+    dplyr::arrange(.data$TaxonOrder)
+
+  # Plot
+  p <- ggplot2::ggplot(df_summary, ggplot2::aes_string(x = x, y = "mean_abundance")) +
+    ggplot2::geom_point() +
+    ggplot2::geom_errorbar(ggplot2::aes(
+      ymin = .data$mean_abundance - .data$se,
+      ymax = .data$mean_abundance + .data$se
+    ), width = 0.2) +
+    ggplot2::facet_wrap(~TaxonLabel, scales = "free_y") +
+    ggplot2::labs(
+      x = x,
+      y = "Relative Abundance",
+      title = paste("Abundance of selected", tax_rank, "over Time")
+    ) +
+    ggplot2::theme_bw(base_size = 15)
+
+  if (!is.null(color)) {
+    p <- p +
+      ggplot2::geom_line(ggplot2::aes(group = interaction(.data$TaxonLabel, .data[[color]]), color = .data[[color]])) +
+      ggplot2::labs(color = color)
+  } else {
+    p <- p +
+      ggplot2::geom_line(ggplot2::aes(group = .data$TaxonLabel))
+  }
+
+  return(p)
+}
+
+
+#' Plot mean abundance of selected taxa across a variable with line
+#'
+#' This function summarizes and plots the relative abundance of selected taxa
+#' at a specified taxonomic rank, optionally stratified by a grouping variable
+#' (e.g., environment, treatment, subject). It displays points with error bars
+#' (mean ± standard error) and connects them with lines. The intention is to v
+#' abdundances as they vary with a relevant variable, ie time.
+#'
+#' @param ps A [`phyloseq::phyloseq`] object.
+#' @param tax_rank A character string specifying the taxonomic rank to plot.
+#'   Must be one of: `"Kingdom"`, `"Phylum"`, `"Class"`, `"Order"`,
+#'   `"Family"`, `"Genus"`, `"Species"`.
+#' @param taxa_list A character vector of taxa names (matching the chosen
+#'   `tax_rank`) to include in the plot.
+#' @param x A character string giving the name of a sample variable to plot
+#'   on the x-axis (e.g., `"SampleType"`, `"Time"`).
+#' @param color (Optional) A character string giving the name of a sample
+#'   variable used to color and group the lines.
+#'
+#' @return A [`ggplot2::ggplot`] object showing mean relative abundance of
+#'   the selected taxa across the specified variable.
+#'
+#' @details
+#' Taxonomy is first agglomerated to the specified `tax_rank` using
+#' [speedyseq::tax_glom()], then melted into long format with
+#' [speedyseq::psmelt()]. For each taxon in `taxa_list`, mean relative
+#' abundance and standard error are calculated across groups defined by
+#' `x` and optionally `color`. The output plot uses facets to display
+#' taxa separately.
+#'
+#' @examples
+#' library(phyloseq)
+#' library(speedyseq)
+#' library(dplyr)
+#'
+#' data("GlobalPatterns")
+#'
+#' # Example 1: Plot abundance of specific families across SampleType
+#' fams <- c("Lachnospiraceae", "Ruminococcaceae", "Bacteroidaceae")
+#' p1 <- plot_taxa_lines(GlobalPatterns,
+#'                       tax_rank = "Family",
+#'                       taxa_list = fams,
+#'                       x = "SampleType")
+#' print(p1)
+#'
+#' # Example 2: Add color by host type
+#' p2 <- plot_taxa_lines(GlobalPatterns,
+#'                       tax_rank = "Family",
+#'                       taxa_list = fams,
+#'                       x = "SampleType",
+#'                       color = "SampleType")
+#' print(p2)
+#'
+#' @export
+plot_taxa_lines <- function(ps, tax_rank, taxa_list, x, color = NULL) {
+  # check inputs
+  stopifnot(inherits(ps, "phyloseq"))
+  tax_hierarchy <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+  if (!tax_rank %in% tax_hierarchy) {
+    stop("`tax_rank` must be one of: ", paste(tax_hierarchy, collapse = ", "))
+  }
+
+  # Agglomerate at specified taxonomic rank
+  ps_rank <- speedyseq::tax_glom(ps, taxrank = tax_rank)
+  df <- speedyseq::psmelt(ps_rank)
+
+  # Build composite taxonomy labels
+  rank_index <- match(tax_rank, tax_hierarchy)
+  ranks_to_concat <- tax_hierarchy[pmax(1, rank_index - 1):rank_index]
+
+  df <- df %>%
+    dplyr::mutate(
+      TaxonLabel = apply(dplyr::select(., dplyr::all_of(ranks_to_concat)), 1,
+                         function(x) paste(stats::na.omit(x), collapse = "_")),
+      TaxonOrder = apply(dplyr::select(., dplyr::all_of(ranks_to_concat)), 1,
+                         function(x) paste(ifelse(is.na(x), "zzz", x), collapse = "_"))
+    )
+
+  # Filter taxa
+  df_filtered <- dplyr::filter(df, .data[[tax_rank]] %in% taxa_list)
+
+  # Summarize mean abundance and SE
+  grouping_vars <- c(x, "TaxonLabel", "TaxonOrder")
+  if (!is.null(color)) grouping_vars <- c(grouping_vars, color)
+
+  df_summary <- df_filtered %>%
+    dplyr::group_by(dplyr::across(all_of(grouping_vars))) %>%
+    dplyr::summarize(
+      mean_abundance = mean(.data$Abundance, na.rm = TRUE),
+      sd = stats::sd(.data$Abundance, na.rm = TRUE),
+      n = dplyr::n(),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      se = .data$sd / sqrt(.data$n),
+      TaxonLabel = factor(.data$TaxonLabel, levels = unique(.data$TaxonLabel))
+    ) %>%
+    dplyr::arrange(.data$TaxonOrder)
+
+  # Plot
+  p <- ggplot2::ggplot(df_summary, ggplot2::aes_string(x = x, y = "mean_abundance")) +
+    ggplot2::geom_point() +
+    ggplot2::geom_errorbar(ggplot2::aes(
+      ymin = .data$mean_abundance - .data$se,
+      ymax = .data$mean_abundance + .data$se
+    ), width = 0.2) +
+    ggplot2::facet_wrap(~TaxonLabel, scales = "free_y") +
+    ggplot2::labs(
+      x = x,
+      y = "Relative Abundance"
+    ) +
+    ggplot2::theme_bw(base_size = 15)
+
+  if (!is.null(color)) {
+    p <- p +
+      ggplot2::geom_line(ggplot2::aes(group = interaction(.data$TaxonLabel, .data[[color]]), color = .data[[color]])) +
+      ggplot2::labs(color = color)
+  } else {
+    p <- p +
+      ggplot2::geom_line(ggplot2::aes(group = .data$TaxonLabel))
+  }
+
+  return(p)
+}
+
 
