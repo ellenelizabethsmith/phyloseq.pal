@@ -44,6 +44,8 @@ If the phyloseq object is not agglomerated at the specified rank, the function w
 \examples{
 # Example usage:
 data("GlobalPatterns")
+ps <- subset_taxa(GlobalPatterns, Phylum \%in\% c("Proteobacteria", "Bacteroidetes"))
+plot_taxa_abundance(ps, "Genus", "Sample", wrap = "SampleType", n = 15, abs = FALSE)
 
 }
 \seealso{

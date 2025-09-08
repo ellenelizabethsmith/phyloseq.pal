@@ -4,28 +4,75 @@
 \alias{plot_taxa_lines}
 \title{Plot Microbial Abundance Over Time}
 \usage{
-plot_taxa_lines(ps, tax_rank, taxa_list, x = "Time", color = "Treatment")
+plot_taxa_lines(ps, tax_rank, taxa_list, x, color = NULL)
+
+plot_taxa_lines(ps, tax_rank, taxa_list, x, color = NULL)
 }
 \arguments{
-\item{ps}{A \code{phyloseq} object.}
+\item{ps}{A \code{\link[phyloseq:phyloseq]{phyloseq::phyloseq}} object.}
 
-\item{tax_rank}{A character string specifying the taxonomic rank (e.g., "Phylum", "Genus").}
+\item{tax_rank}{A character string specifying the taxonomic rank to plot.
+Must be one of: \code{"Kingdom"}, \code{"Phylum"}, \code{"Class"}, \code{"Order"},
+\code{"Family"}, \code{"Genus"}, \code{"Species"}.}
 
-\item{taxa_list}{A character vector of taxa names to include in the plot.}
+\item{taxa_list}{A character vector of taxa names (matching the chosen
+\code{tax_rank}) to include in the plot.}
 
-\item{x}{A character string specifying the variable to use for the x-axis (default: \code{"Time"}).}
+\item{x}{A character string giving the name of a sample variable to plot
+on the x-axis (e.g., \code{"SampleType"}, \code{"Time"}).}
 
-\item{color}{A character string specifying the variable to use for color grouping (default: \code{"Treatment"}).}
+\item{color}{(Optional) A character string giving the name of a sample
+variable used to color and group the lines.}
 }
 \value{
 A \code{ggplot2} object showing relative abundance over time.
+
+A \code{\link[ggplot2:ggplot]{ggplot2::ggplot}} object showing mean relative abundance of
+the selected taxa across the specified variable.
 }
 \description{
 This function plots the relative abundance of selected taxa over time (or another variable),
 faceted by taxa, with error bars representing standard error.
+
+This function summarizes and plots the relative abundance of selected taxa
+at a specified taxonomic rank, optionally stratified by a grouping variable
+(e.g., environment, treatment, subject). It displays points with error bars
+(mean ± standard error) and connects them with lines. The intention is to v
+abdundances as they vary with a relevant variable, ie time.
+}
+\details{
+Taxonomy is first agglomerated to the specified \code{tax_rank} using
+\code{\link[speedyseq:tax_glom]{speedyseq::tax_glom()}}, then melted into long format with
+\code{\link[speedyseq:psmelt]{speedyseq::psmelt()}}. For each taxon in \code{taxa_list}, mean relative
+abundance and standard error are calculated across groups defined by
+\code{x} and optionally \code{color}. The output plot uses facets to display
+taxa separately.
 }
 \examples{
 \dontrun{
 plot_microbe_abundance(ps, "Genus", c("Lactobacillus", "Bifidobacterium"))
+plot_microbe_abundance(ps, "Genus", c("Lactobacillus"), color = NULL)
 }
+library(phyloseq)
+library(speedyseq)
+library(dplyr)
+
+data("GlobalPatterns")
+
+# Example 1: Plot abundance of specific families across SampleType
+fams <- c("Lachnospiraceae", "Ruminococcaceae", "Bacteroidaceae")
+p1 <- plot_taxa_lines(GlobalPatterns,
+                      tax_rank = "Family",
+                      taxa_list = fams,
+                      x = "SampleType")
+print(p1)
+
+# Example 2: Add color by host type
+p2 <- plot_taxa_lines(GlobalPatterns,
+                      tax_rank = "Family",
+                      taxa_list = fams,
+                      x = "SampleType",
+                      color = "SampleType")
+print(p2)
+
 }
