@@ -6,13 +6,14 @@
 \usage{
 plot_taxa_abundance(
   ps,
-  rank,
+  rank = "Phylum",
   x,
   wrap = NULL,
   n = 20,
   byabundance = TRUE,
   abs = FALSE,
-  size = 10
+  size = 10,
+  nameranks = 1
 )
 }
 \arguments{
