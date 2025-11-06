@@ -280,7 +280,7 @@ melt_to_top_n <- function(ps,n,rank){
 #'
 #' @importFrom ggplot2 aes_string geom_bar scale_fill_manual labs theme scale_y_continuous scale_x_discrete facet_grid
 #'
-plot_taxa_abundance <- function(ps,rank,x, wrap = NULL, n=20, byabundance=TRUE,abs=FALSE,size=10){
+plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundance=TRUE,abs=FALSE,size=10,nameranks=1){
   cols.n <- c(c(nice20, ridiculouslybigcolset)[1:n], "lightgrey")
   if  (rank == "OTU") {
     print("Using OTUs")
@@ -307,8 +307,18 @@ plot_taxa_abundance <- function(ps,rank,x, wrap = NULL, n=20, byabundance=TRUE,a
   tt <- data.frame(glom@tax_table@.Data)
   tt$taxon <- "Other"
   try(tt[tt[[rank]] == "Unassigned", ]$taxon <- "Unassigned")
-  tt[rownames(tt) %in% topnotus, ]$taxon <- tt[rownames(tt) %in%
-                                                 topnotus, ][[rank]]
+  if(nameranks > 1){
+    allranks <- colnames(tt)[-length(colnames(tt))]
+    rank_index <- match(rank,allranks)
+    lowestrank <- max(1,(rank_index-(nameranks-1)))
+    rankrange <- c(lowestrank:rank_index)
+    taxonnames <- apply(tt[rownames(tt) %in%  topnotus, ][rankrange],1,paste,collapse="_")
+  }else{
+    rankrange <- rank_index
+    taxonnames <- tt[rownames(tt) %in%
+                       topnotus, ][[rank]]
+  }
+  tt[rownames(tt) %in% topnotus, ]$taxon <- taxonnames
   tax_table(glom) <- tax_table(as.matrix(tt))
   melt <- speedyseq::psmelt(glom)
   labels <- (unique(melt$taxon))
