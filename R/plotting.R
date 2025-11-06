@@ -96,6 +96,28 @@ ps_from_ampliseq <- function(directory,metadata=NULL,ranks){
   return(ps)
 }
 
+#' Title
+#'
+#' @param n
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+get_colours <- function(n){
+  nice20 <- c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
+              '#46f0f0', '#f032e6',   '#bcf60c', '#fabebe', '#008080', '#e6beff',
+              '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+              '#000075', '#808080')
+  if (n <21){
+    return(nice20[1:n])
+  } else {
+    bigcolset<-c(RColorBrewer::brewer.pal(8,"Set2"), RColorBrewer::brewer.pal(12,"Set3"), RColorBrewer::brewer.pal(9,"Set1"), RColorBrewer::brewer.pal(12,"Paired"))
+    ridiculouslybigcolset <- c(rep(c(nice20,bigcolset),10))
+    return(ridiculouslybigcolset[1:n])
+  }
+}
+
 
 #Strongly suspect this is bad practise
 #' Return 20 pretty colours
@@ -259,95 +281,73 @@ melt_to_top_n <- function(ps,n,rank){
 #' @importFrom ggplot2 aes_string geom_bar scale_fill_manual labs theme scale_y_continuous scale_x_discrete facet_grid
 #'
 plot_taxa_abundance <- function(ps,rank,x, wrap = NULL, n=20, byabundance=TRUE,abs=FALSE,size=10){
-
-  #set cols
-  cols.n <- c(c(nice20, ridiculouslybigcolset)[1:n],"lightgrey")
-
-  #check if phyloseq agglomerated at appropriate rank
-  #and if not, perform agglomeration
-  if(!length(unique(as.data.frame(ps@tax_table@.Data)[,rank])) == length(unique(rownames((as.data.frame(ps@tax_table@.Data)))))){
-    print("Agglomerating at specified rank...")
-    ps@tax_table@.Data[is.na(ps@tax_table@.Data)] <- "Unassigned"
-    glom <-speedyseq::tax_glom(ps, taxrank = rank, NArm = FALSE)
-    print("Done.")
-  }  else if(rank == "OTU"){
+  cols.n <- c(c(nice20, ridiculouslybigcolset)[1:n], "lightgrey")
+  if  (rank == "OTU") {
     print("Using OTUs")
     glom <- ps
     tt <- data.frame(glom@tax_table@.Data)
     tt$OTU <- rownames(tt)
     tt <- as.matrix(tt)
     glom@tax_table <- tax_table(tt)
+  }  else if (!length(unique(as.data.frame(ps@tax_table@.Data)[, rank])) ==
+              length(unique(rownames((as.data.frame(ps@tax_table@.Data)))))) {
+    print("Agglomerating at specified rank...")
+    ps@tax_table@.Data[is.na(ps@tax_table@.Data)] <- "Unassigned"
+    glom <- speedyseq::tax_glom(ps, taxrank = rank, NArm = FALSE)
+    print("Done.")
   }  else {
     print("Using provided agglomerated object.")
     glom <- ps
   }
-
   tt <- data.frame(glom@tax_table@.Data)
-  keep <- rownames(tt[tt[[rank]]!="Unassigned",])
+  keep <- rownames(tt[tt[[rank]] != "Unassigned", ])
   ass_only <- prune_taxa(keep, glom)
   topnotus <- names(sort(taxa_sums(ass_only), TRUE)[1:min(nrow(ass_only@tax_table),
                                                           n)])
-
-  #create a taxonomy table containing these ASVs with everything else set to "Other"
   tt <- data.frame(glom@tax_table@.Data)
   tt$taxon <- "Other"
-  tt[tt[[rank]] == "Unassigned",]$taxon <- "Unassigned"
-  tt[rownames(tt) %in% topnotus,]$taxon <- tt[rownames(tt) %in% topnotus,][[rank]]
-
-
-  #taxtabn = data.frame(cbind(tax_table(glom), taxon = "Other"))
-  #taxtabn[topnotus, "taxon"] <- as(tax_table(glom)[topnotus, rank],"character")
-
+  try(tt[tt[[rank]] == "Unassigned", ]$taxon <- "Unassigned")
+  tt[rownames(tt) %in% topnotus, ]$taxon <- tt[rownames(tt) %in%
+                                                 topnotus, ][[rank]]
   tax_table(glom) <- tax_table(as.matrix(tt))
   melt <- speedyseq::psmelt(glom)
-
-  #get names for reordering factors
   labels <- (unique(melt$taxon))
   nlabs <- length(labels)
-
-  #move "Unassigned" to end
-  if ("Unassigned" %in% labels){
+  if ("Unassigned" %in% labels) {
     labels <- labels[!labels %in% "Unassigned"]
     labels[nlabs] = "Unassigned"
   }
-  #if > n taxa, move "Other" to end
-  if("Other" %in% melt$taxon){
+  if ("Other" %in% melt$taxon) {
     labels <- labels[!labels %in% "Other"]
     labels[nlabs] <- "Other"
   }
-  for(i in seq(1:nlabs)){ #making other and unassigned have consistent colours
-    if(labels[i] == "Unassigned"){
+  for (i in seq(1:nlabs)) {
+    if (labels[i] == "Unassigned") {
       cols.n[i] <- "grey"
-    } else if(labels[i] == "Other"){
+    }
+    else if (labels[i] == "Other") {
       cols.n[i] <- "lightblue"
     }
   }
-
-  #labels by abundance w/ unassigned and otehr at end
-  melt$taxon <- forcats::fct_relevel(melt$taxon,labels)
-
-  #make the stacked bar chart
+  melt$taxon <- forcats::fct_relevel(melt$taxon, labels)
   i <- ggplot(melt, aes_string(x = x, y = "Abundance", fill = "taxon")) +
     geom_bar(stat = "identity", width = 1, position = position_fill()) +
-    scale_fill_manual(values=cols.n, na.value = "grey")+
-    theme(axis.title.x = element_blank())+
-    labs(fill=rank)+
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-    theme(legend.position = "bottom")+
-    theme(text = element_text(size = size))+
-    scale_y_continuous(expand = c(0,0))+
-    scale_x_discrete(expand = c(0,0))
-
-  if(abs){
-    i <- i+ geom_bar(stat = "identity", width = 1, position = "stack")
+    scale_fill_manual(values = cols.n, na.value = "grey") +
+    theme(axis.title.x = element_blank()) + labs(fill = rank) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5,
+                                     hjust = 1)) + theme(legend.position = "bottom") +
+    theme(text = element_text(size = size)) + scale_y_continuous(expand = c(0,
+                                                                            0)) + scale_x_discrete(expand = c(0, 0))
+  if (abs) {
+    i <- i + geom_bar(stat = "identity", width = 1, position = "stack")
   }
-
-  if (is.character(wrap)){
-    i <- i + facet_grid(as.formula(paste("~", wrap)), scales = "free_x", space = "free")
+  if (is.character(wrap)) {
+    i <- i + facet_grid(as.formula(paste("~", wrap)), scales = "free_x",
+                        space = "free")
   }
-
   return(i)
 }
+
 
 #' Merge Two Differently oriented DADA2 runs from the same samples
 #'
@@ -924,4 +924,148 @@ plot_taxa_lines <- function(ps, tax_rank, taxa_list, x, color = NULL) {
   return(p)
 }
 
+#' Plot abundance of selected taxa across a variable
+#'
+#' This function summarizes and plots the relative abundance of selected taxa
+#' at a specified taxonomic rank, optionally stratified by a grouping variable
+#' (e.g., environment, treatment, subject). It supports several plot types:
+#' line plots (means ± SE), bar plots (means ± SE), boxplots (distribution),
+#' and points at group means.
+#'
+#' @param ps A [`phyloseq::phyloseq`] object.
+#' @param tax_rank A character string specifying the taxonomic rank to plot.
+#'   Must be one of: `"Kingdom"`, `"Phylum"`, `"Class"`, `"Order"`,
+#'   `"Family"`, `"Genus"`, `"Species"`.
+#' @param taxa_list A character vector of taxa names (matching the chosen
+#'   `tax_rank`) to include in the plot.
+#' @param x A character string giving the name of a sample variable to plot
+#'   on the x-axis (e.g., `"SampleType"`, `"Time"`).
+#' @param color (Optional) A character string giving the name of a sample
+#'   variable used to color and group the geoms.
+#' @param plot_type Type of plot. One of `"line"`, `"point"`, `"box"`, `"bar"`.
+#'   - `"line"`: mean ± SE connected by lines
+#'   - `"point"`: mean ± SE shown as points only
+#'   - `"box"`: boxplots of raw abundances
+#'   - `"bar"`: barplots of means ± SE
+#'
+#' @return A [`ggplot2::ggplot`] object.
+#'
+#' @details
+#' Taxonomy is first agglomerated to the specified `tax_rank` using
+#' [speedyseq::tax_glom()], then melted into long format with
+#' [speedyseq::psmelt()]. Depending on `plot_type`, either raw values are used
+#' (`"box"`) or group summaries (mean ± SE) are computed across groups defined
+#' by `x` and optionally `color`.
+#'
+#' @examples
+#' library(phyloseq)
+#' library(speedyseq)
+#' data("GlobalPatterns")
+#' #'
+#' # Line plot
+#' plot_taxa(GlobalPatterns, "Family", c("Lachnospiraceae", "Ruminococcaceae", "Bacteroidaceae"), x = "SampleType", plot_type = "line")
+#'
+#' # Boxplot
+#' plot_taxa(GlobalPatterns, "Family", c("Lachnospiraceae", "Ruminococcaceae", "Bacteroidaceae"), x = "SampleType", plot_type = "box")
+#'
+#' @export
+plot_taxa <- function(ps, tax_rank, taxa_list, x, color = NULL,
+                      plot_type = c("line", "point", "box", "bar"),shared_y = FALSE) {
+  plot_type <- match.arg(plot_type)
+
+  stopifnot(inherits(ps, "phyloseq"))
+
+  tax_hierarchy <- rank_names(ps)
+  if (!tax_rank %in% tax_hierarchy) {
+    stop("`tax_rank` must be one of: ", paste(tax_hierarchy, collapse = ", "))
+  }
+
+  # Agglomerate and melt
+  ps_rank <- speedyseq::tax_glom(ps, taxrank = tax_rank)
+  df <- speedyseq::psmelt(ps_rank)
+
+  # Label
+  rank_index <- match(tax_rank, tax_hierarchy)
+  ranks_to_concat <- tax_hierarchy[pmax(1, rank_index - 1):rank_index]
+  df <- df %>%
+    dplyr::mutate(
+      TaxonLabel = apply(dplyr::select(., dplyr::all_of(ranks_to_concat)), 1,
+                         function(x) paste(stats::na.omit(x), collapse = "_")),
+      TaxonOrder = apply(dplyr::select(., dplyr::all_of(ranks_to_concat)), 1,
+                         function(x) paste(ifelse(is.na(x), "zzz", x), collapse = "_"))
+    ) %>%
+    dplyr::filter(.data[[tax_rank]] %in% taxa_list)
+
+  # Summaries for mean-based plots
+  if (plot_type %in% c("line", "point", "bar")) {
+    grouping_vars <- c(x, "TaxonLabel", "TaxonOrder")
+    if (!is.null(color)) grouping_vars <- c(grouping_vars, color)
+
+    df <- df %>%
+      dplyr::group_by(dplyr::across(all_of(grouping_vars))) %>%
+      dplyr::summarize(
+        mean_abundance = mean(.data$Abundance, na.rm = TRUE),
+        sd = stats::sd(.data$Abundance, na.rm = TRUE),
+        n = dplyr::n(),
+        .groups = "drop"
+      ) %>%
+      dplyr::mutate(
+        se = .data$sd / sqrt(.data$n),
+        TaxonLabel = factor(.data$TaxonLabel, levels = unique(.data$TaxonLabel))
+      ) %>%
+      dplyr::arrange(.data$TaxonOrder)
+  }
+
+  # Plot
+  p <- ggplot2::ggplot(df, ggplot2::aes_string(x = x)) +
+    ggplot2::theme_bw(base_size = 15) +
+    ggplot2::labs(x = x, y = "Relative Abundance")
+
+  if (shared_y) {
+  p <- p + ggplot2::facet_wrap(~TaxonLabel)
+  } else {
+  p <- p + ggplot2::facet_wrap(~TaxonLabel,scales="free_y")
+  }
+
+  if (plot_type == "line") {
+    p <- p +
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = mean_abundance - se,
+                                          ymax = mean_abundance + se), width = 0.2) +
+      ggplot2::geom_point(ggplot2::aes(y = mean_abundance,
+                                       fill = if (!is.null(color)) .data[[color]] else NULL),
+                          shape = 21, color="black", size=3) +
+
+      ggplot2::geom_line(ggplot2::aes(y = mean_abundance,
+                                      group = if (!is.null(color)) interaction(TaxonLabel, .data[[color]]) else TaxonLabel,
+                                      color = if (!is.null(color)) .data[[color]] else NULL)) +
+      if (!is.null(color)) ggplot2::labs(color = color, fill=color)
+  } else if (plot_type == "point") {
+    p <- p +
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = mean_abundance - se,
+                                          ymax = mean_abundance + se), width = 0.2)+
+      ggplot2::geom_point(ggplot2::aes(y = mean_abundance,
+                                       fill = if (!is.null(color)) .data[[color]] else NULL),
+                          shape = 21, color="black", size=3) +
+
+      if (!is.null(color)) ggplot2::labs(fill = color)
+  } else if (plot_type == "bar") {
+    p <- p +
+      ggplot2::geom_col(ggplot2::aes(y = mean_abundance,
+                                     fill = if (!is.null(color)) .data[[color]] else NULL),
+                        position = "dodge",color="black") +
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = mean_abundance - se,
+                                          ymax = mean_abundance + se,
+                                          group = if (!is.null(color)) .data[[color]] else NULL),
+                             position = ggplot2::position_dodge(width = 0.9),
+                             width = 0.2) +
+      if (!is.null(color)) ggplot2::labs(fill = color)
+  } else if (plot_type == "box") {
+    p <- p +
+      ggplot2::geom_boxplot(ggplot2::aes(y = Abundance,
+                                         fill = if (!is.null(color)) .data[[color]] else NULL)) +
+      if (!is.null(color)) ggplot2::labs(fill = color)
+  }
+
+  return(p)
+}
 
