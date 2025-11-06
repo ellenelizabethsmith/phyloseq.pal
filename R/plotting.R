@@ -314,7 +314,7 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
     rankrange <- c(lowestrank:rank_index)
     taxonnames <- apply(tt[rownames(tt) %in%  topnotus, ][rankrange],1,paste,collapse="_")
   }else{
-    rankrange <- rank_index
+    rankrange <- rank
     taxonnames <- tt[rownames(tt) %in%
                        topnotus, ][[rank]]
   }
