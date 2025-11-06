@@ -15,9 +15,11 @@ BugReports: https://github.com/Sm3lly123/phyloseq.pal/issues
 Imports: 
     Biostrings,
     dada2,
+    dplyr,
     forcats,
     ggplot2,
     ggpubr,
+    magrittr,
     microshades,
     phyloseq,
     RColorBrewer,

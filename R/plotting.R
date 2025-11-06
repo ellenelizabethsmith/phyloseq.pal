@@ -307,8 +307,9 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
   tt <- data.frame(glom@tax_table@.Data)
   tt$taxon <- "Other"
   try(tt[tt[[rank]] == "Unassigned", ]$taxon <- "Unassigned")
+  #needed for making good names
+  allranks <- colnames(tt)[-length(colnames(tt))]
   if(nameranks > 1){
-    allranks <- colnames(tt)[-length(colnames(tt))]
     rank_index <- match(rank,allranks)
     lowestrank <- max(1,(rank_index-(nameranks-1)))
     rankrange <- c(lowestrank:rank_index)
@@ -319,7 +320,8 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
                        topnotus, ][[rank]]
   }
   tt[rownames(tt) %in% topnotus, ]$taxon <- taxonnames
-  tax_table(glom) <- tax_table(as.matrix(tt))
+  ttnew <- data.frame(row.names = rownames(tt),taxon=tt$taxon)
+  tax_table(glom) <- tax_table(as.matrix(ttnew))
   melt <- speedyseq::psmelt(glom)
   labels <- (unique(melt$taxon))
   nlabs <- length(labels)
@@ -340,14 +342,29 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
     }
   }
   melt$taxon <- forcats::fct_relevel(melt$taxon, labels)
+
+  #aggregate by x var to make prettier plots!
+  if (is.character(wrap)) {
+    melt <- melt |>
+      dplyr::group_by(!!sym(x), taxon, !!sym(wrap)) |>
+      dplyr::summarise(Abundance = sum(Abundance, na.rm = TRUE), .groups = "drop")
+  } else {
+    melt <- melt |>
+      dplyr::group_by(!!sym(x), taxon) |>
+      dplyr::summarise(Abundance = sum(Abundance, na.rm = TRUE), .groups = "drop")
+  }
+
   i <- ggplot(melt, aes_string(x = x, y = "Abundance", fill = "taxon")) +
-    geom_bar(stat = "identity", width = 1, position = position_fill()) +
+    geom_bar(stat = "identity", width = 1, position = position_fill(),color="black") +
     scale_fill_manual(values = cols.n, na.value = "grey") +
     theme(axis.title.x = element_blank()) + labs(fill = rank) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5,
                                      hjust = 1)) + theme(legend.position = "bottom") +
-    theme(text = element_text(size = size)) + scale_y_continuous(expand = c(0,
-                                                                            0)) + scale_x_discrete(expand = c(0, 0))
+    theme(text = element_text(size = size),
+          legend.position = "right") +
+    scale_y_continuous(expand = c(0,0)) +
+    scale_x_discrete(expand = c(0, 0))+
+    guides(fill=guide_legend(ncol=1))
   if (abs) {
     i <- i + geom_bar(stat = "identity", width = 1, position = "stack")
   }
