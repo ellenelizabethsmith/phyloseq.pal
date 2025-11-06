@@ -283,7 +283,7 @@ melt_to_top_n <- function(ps,n,rank){
 plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundance=TRUE,abs=FALSE,size=10,nameranks=1){
   cols.n <- c(c(nice20, ridiculouslybigcolset)[1:n], "lightgrey")
   if  (rank == "OTU") {
-    print("Using OTUs")
+    print("Using OTUs/ASVs")
     glom <- ps
     tt <- data.frame(glom@tax_table@.Data)
     tt$OTU <- rownames(tt)
