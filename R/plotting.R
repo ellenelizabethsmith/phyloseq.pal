@@ -105,8 +105,8 @@ ps_from_ampliseq <- function(directory,metadata=NULL,ranks){
 #'
 #' @examples
 get_colours <- function(n){
-  nice20 <- c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
-              '#46f0f0', '#f032e6',   '#bcf60c', '#fabebe', '#008080', '#e6beff',
+  nice20 <- c('#f5a3b7','#ffe957','#b4c1ef' ,'#aee4b5', '#f8ab75', '#911eb4',
+              '#46f0f0', '#ff7a7a',   '#bcf60c', '#fabebe', '#008080', '#e6beff',
               '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
               '#000075', '#808080')
   if (n <21){
