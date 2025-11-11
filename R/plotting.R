@@ -353,7 +353,16 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
       dplyr::group_by(!!sym(x), taxon) |>
       dplyr::summarise(Abundance = sum(Abundance, na.rm = TRUE), .groups = "drop")
   }
-
+  # Create a composite taxonomy ordering variable
+  tax_ranks <- colnames(glom@tax_table)
+  if (rank %in% tax_ranks) {
+    rank_index <- match(rank, tax_ranks)
+    higher_ranks <- tax_ranks[1:rank_index]
+    # Combine higher ranks into one string for ordering
+    melt$tax_order <- apply(melt[, higher_ranks, drop = FALSE], 1, paste, collapse = "_")
+    # Order x-axis by this combined taxonomy
+    melt[[x]] <- forcats::fct_reorder(melt[[x]], as.numeric(factor(melt$tax_order)))
+  }
   i <- ggplot(melt, aes_string(x = x, y = "Abundance", fill = "taxon")) +
     geom_bar(stat = "identity", width = 1, position = position_fill(),color="black") +
     scale_fill_manual(values = cols.n, na.value = "grey") +
