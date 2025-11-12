@@ -263,6 +263,7 @@ melt_to_top_n <- function(ps,n,rank){
 #' @param byabundance If TRUE, taxa will be ordered by decreasing abundance; if FALSE, they will be ordered by taxonomic rank.
 #' @param abs If TRUE, plots will use absolute rather than relative counts per sample.
 #' @param size The font size for plot labels.
+#' @param nameranks The number of levels to include in the taxon labels.
 #'
 #' @return A ggplot object representing the taxa abundance plot.
 #' @export
@@ -280,7 +281,7 @@ melt_to_top_n <- function(ps,n,rank){
 #'
 #' @importFrom ggplot2 aes_string geom_bar scale_fill_manual labs theme scale_y_continuous scale_x_discrete facet_grid
 #'
-plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundance=TRUE,abs=FALSE,size=10,nameranks=1){
+plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundance=FALSE,abs=FALSE,size=10,nameranks=1){
   cols.n <- c(c(nice20, ridiculouslybigcolset)[1:n], "lightgrey")
   if  (rank == "OTU") {
     print("Using OTUs/ASVs")
@@ -323,8 +324,13 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
   ttnew <- data.frame(row.names = rownames(tt),taxon=tt$taxon)
   tax_table(glom) <- tax_table(as.matrix(ttnew))
   melt <- speedyseq::psmelt(glom)
+
+  if(!byabundance)melt <- melt[order(melt$taxon),]
+  else melt[order(melt$Abundance),]
+
   labels <- (unique(melt$taxon))
   nlabs <- length(labels)
+
   if ("Unassigned" %in% labels) {
     labels <- labels[!labels %in% "Unassigned"]
     labels[nlabs] = "Unassigned"
@@ -353,24 +359,17 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
       dplyr::group_by(!!sym(x), taxon) |>
       dplyr::summarise(Abundance = sum(Abundance, na.rm = TRUE), .groups = "drop")
   }
-  # Create a composite taxonomy ordering variable
-  tax_ranks <- colnames(glom@tax_table)
-  if (rank %in% tax_ranks) {
-    rank_index <- match(rank, tax_ranks)
-    higher_ranks <- tax_ranks[1:rank_index]
-    # Combine higher ranks into one string for ordering
-    melt$tax_order <- apply(melt[, higher_ranks, drop = FALSE], 1, paste, collapse = "_")
-    # Order x-axis by this combined taxonomy
-    melt[[x]] <- forcats::fct_reorder(melt[[x]], as.numeric(factor(melt$tax_order)))
-  }
+
+
   i <- ggplot(melt, aes_string(x = x, y = "Abundance", fill = "taxon")) +
     geom_bar(stat = "identity", width = 1, position = position_fill(),color="black") +
     scale_fill_manual(values = cols.n, na.value = "grey") +
-    theme(axis.title.x = element_blank()) + labs(fill = rank) +
+    labs(fill = rank) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5,
                                      hjust = 1)) + theme(legend.position = "bottom") +
     theme(text = element_text(size = size),
           legend.position = "right") +
+    ylab("Abundance (%)") +
     scale_y_continuous(expand = c(0,0)) +
     scale_x_discrete(expand = c(0, 0))+
     guides(fill=guide_legend(ncol=1))
