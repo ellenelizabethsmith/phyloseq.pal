@@ -23,6 +23,7 @@ Imports:
     microshades,
     phyloseq,
     RColorBrewer,
+    scales,
     speedyseq,
     tidyverse,
 Remotes:

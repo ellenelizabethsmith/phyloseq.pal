@@ -360,7 +360,6 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
       dplyr::summarise(Abundance = sum(Abundance, na.rm = TRUE), .groups = "drop")
   }
 
-
   i <- ggplot(melt, aes_string(x = x, y = "Abundance", fill = "taxon")) +
     geom_bar(stat = "identity", width = 1, position = position_fill(),color="black") +
     scale_fill_manual(values = cols.n, na.value = "grey") +
@@ -370,7 +369,12 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
     theme(text = element_text(size = size),
           legend.position = "right") +
     ylab("Abundance (%)") +
-    scale_y_continuous(expand = c(0,0)) +
+    scale_y_continuous(
+      #limits = c(0, 1),
+      breaks = seq(0, 1, by = 0.1),
+      labels = scales::percent_format(accuracy = 1),
+      expand = c(0, 0)
+      )+
     scale_x_discrete(expand = c(0, 0))+
     guides(fill=guide_legend(ncol=1))
   if (abs) {

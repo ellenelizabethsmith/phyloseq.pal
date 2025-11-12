@@ -10,7 +10,7 @@ plot_taxa_abundance(
   x,
   wrap = NULL,
   n = 20,
-  byabundance = TRUE,
+  byabundance = FALSE,
   abs = FALSE,
   size = 10,
   nameranks = 1
@@ -32,6 +32,8 @@ plot_taxa_abundance(
 \item{abs}{If TRUE, plots will use absolute rather than relative counts per sample.}
 
 \item{size}{The font size for plot labels.}
+
+\item{nameranks}{The number of levels to include in the taxon labels.}
 }
 \value{
 A ggplot object representing the taxa abundance plot.
