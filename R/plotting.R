@@ -378,13 +378,9 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
     scale_x_discrete(expand = c(0, 0))+
     guides(fill=guide_legend(ncol=1))
   if (abs) {
-<<<<<<< HEAD
     i <- i + stat_summary(fun = mean, geom = "bar", color = "black", position ="stack",width=1)+
       ylab("Absolute Abundance")+
       scale_y_continuous(expand=c(0,0))
-=======
-    i <- i + stat_summary()
->>>>>>> 96093b83d78756a4a7f17014803895770b2de7e9
   }
   if (is.character(wrap)) {
     i <- i + facet_grid(as.formula(paste("~", wrap)), scales = "free_x",
