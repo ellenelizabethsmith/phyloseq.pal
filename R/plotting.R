@@ -378,7 +378,7 @@ plot_taxa_abundance <- function(ps,rank="Phylum",x, wrap = NULL, n=20, byabundan
     scale_x_discrete(expand = c(0, 0))+
     guides(fill=guide_legend(ncol=1))
   if (abs) {
-    i <- i + geom_bar(stat = "identity", width = 1, position = "stack")
+    i <- i + stat_summary()
   }
   if (is.character(wrap)) {
     i <- i + facet_grid(as.formula(paste("~", wrap)), scales = "free_x",
