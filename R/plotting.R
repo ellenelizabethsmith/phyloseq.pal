@@ -1011,7 +1011,8 @@ plot_taxa_lines <- function(ps, tax_rank, taxa_list, x, color = NULL) {
 #'
 #' @export
 plot_taxa <- function(ps, tax_rank, taxa_list, x, color = NULL,
-                      plot_type = c("line", "point", "box", "bar"),shared_y = FALSE) {
+                      plot_type = c("line", "point", "box", "bar"),shared_y = FALSE,
+                      relative=TRUE) {
   plot_type <- match.arg(plot_type)
 
   stopifnot(inherits(ps, "phyloseq"))
@@ -1024,6 +1025,14 @@ plot_taxa <- function(ps, tax_rank, taxa_list, x, color = NULL,
   # Agglomerate and melt
   ps_rank <- speedyseq::tax_glom(ps, taxrank = tax_rank)
   df <- speedyseq::psmelt(ps_rank)
+
+  #transform to relative abundance if desired.
+  if(relative){
+    df <- df %>%
+      dplyr::group_by(Sample) %>%
+      dplyr::mutate(Abundance = Abundance / sum(Abundance)) %>%
+      dplyr::ungroup()
+  }
 
   # Label
   rank_index <- match(tax_rank, tax_hierarchy)
